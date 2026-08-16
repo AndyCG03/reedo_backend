@@ -234,31 +234,65 @@ They mock the repository **interface** (`UserProfileRepository`), the CQRS buses
 
 ## Database migrations
 
-Schema changes are managed by **Prisma Migrate**. Migrations are stored in `prisma/migrations/` (committed to the repo) and applied against the database pointed to by `DIRECT_URL` (see `prisma.config.ts`).
+Schema changes are managed by **Prisma Migrate** in *every* environment (local, dev/prod). Migrations are stored in `prisma/migrations/` (committed to the repo) and applied against whichever database `DIRECT_URL` points to (see `prisma.config.ts`) — the local PostgreSQL when `.env` has the local block, Supabase when it has the dev/prod block.
+
+Because `prisma migrate` needs a session-mode (direct) connection — PgBouncer in transaction mode breaks it — `prisma.config.ts` resolves the CLI connection from `DIRECT_URL`, while the runtime uses `DATABASE_URL`.
+
+**Commands — one workflow for local and dev:**
 
 ```bash
-# Generate a new migration from schema changes (writes the migration file only)
-npm run migration:generate
-
-# Apply all pending migrations (deploy/CI)
-npm run migration:run
-
-# Interactive dev migration (generates + applies)
+# 1) CREATE a migration: generate from schema.prisma changes + apply to the
+#    currently configured database (.env). Local: generates the file AND
+#    applies it to your local DB. Commit the created
+#    prisma/migrations/<timestamp>_<name>/migration.sql to git.
 npm run migration:dev
 
-# Reset the database and re-apply all migrations
+#    Only generate the migration file without applying it (e.g. for review):
+npm run migration:generate
+
+# 2) APPLY (push) pending migrations to the currently configured database.
+#    Locally: after pulling someone else's migration files, or on a fresh DB.
+#    Dev/prod: switch .env to the Supabase block and run it.
+npm run migration:run
+
+# 3) RESET a database and re-apply all migrations from scratch (dev only,
+#    drops all data): use it locally when the DB drifted from the migrations,
+#    e.g. it was previously created with TypeORM auto-sync.
 npm run migration:reset
 
-# Show applied / pending migrations
-npm run migration:status
-
-# Inspect data with Prisma Studio
-npm run prisma:studio
+# Status / helpers
+npm run migration:status        # show applied / pending migrations
+npm run prisma:studio           # inspect data in a browser on localhost:5555
 ```
 
-Because `prisma migrate` needs a session-mode (direct) connection — PgBouncer in transaction mode breaks it — `prisma.config.ts` resolves the CLI connection from `DIRECT_URL` (the Supabase session pooler at port `5432`), while the runtime uses `DATABASE_URL` (the transaction pooler at port `6543`).
+### Typical workflows
 
-> **First migration:** if the database already has the `user_profiles` table (created earlier by TypeORM auto-sync), run `npm run migration:dev` to create the baseline from the schema. On a fresh database, `npm run migration:generate` + `npm run migration:run` applies it from scratch.
+**Local development (create a migration):**
+```bash
+# 1. Edit prisma/schema.prisma
+# 2. Generate + apply the migration on your local DB, and commit the file
+npm run migration:dev
+```
+
+**Host local -> dev/prod (Supabase):**
+```bash
+# 1. Your migration is already committed (created locally with migration:dev)
+# 2. Switch .env to the Supabase block (dev/prod)
+# 3. Apply only the pending migrations on Supabase
+npm run migration:run
+```
+
+**Fresh machine / clone (bootstrap a database):**
+```bash
+# Local: start PostgreSQL first, then apply every migration in order
+docker compose up -d
+npm run migration:run
+
+# Dev/prod (Supabase): set .env to the Supabase block, then
+npm run migration:run
+```
+
+> **First migration:** when migrating a database that already has the `user_profiles` table (created earlier by TypeORM auto-sync), reset it first and apply the migrations from scratch instead of mixing histories: `npm run migration:reset` (local) — or drop/recreate and then `npm run migration:run`.
 
 ---
 
@@ -303,5 +337,5 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 - `src/routes/routes.module.ts` is the general endpoint mapper: it joins the endpoints of every feature/module.
 - Tests live in the dedicated `tests/` folder (per module → per feature/slice) and use `*.test.ts`; the repository **interface**, the CQRS buses and the mocked `PrismaService` make every test run without a database.
 - Persistence goes through **Prisma** only: `src/prisma/prisma.service.ts` is the single PrismaClient instance, injected via the `@Global()` `PrismaModule`.
-- Schema changes always go through [Prisma Migrate](#database-migrations) — never rely on implicit auto-sync (there is none in Prisma).
+- Schema changes always go through [Prisma Migrate](#database-migrations) in every environment — migrations are the only way to sync the schema (no auto-sync).
 - `.env` is git-ignored; commit only `.env.example`.
