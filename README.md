@@ -34,9 +34,9 @@ Backend for a **reading application**. Built with [NestJS](https://nestjs.com), 
 | -------------- | ------------------------------------------------------------------- |
 | Runtime        | Node.js 22+, TypeScript 5+                                          |
 | Framework      | NestJS 11                                                           |
-| CQRS           | `@nestjs/cqrs` (CommandBus / QueryBus)                              |
-| Database       | PostgreSQL via **Prisma ORM 7** (`@prisma/client` + `@prisma/adapter-pg`) |
+| ORM/CQRS       | Prisma 7 (`@prisma/client` + `@prisma/adapter-pg`) + `@nestjs/cqrs`  |
 | Validation     | `class-validator` + global `ValidationPipe`                         |
+| Pagination     | `@nestarc/pagination` (offset + cursor, filtering, sorting)         |
 | API docs/test  | OpenAPI (`@nestjs/swagger`) rendered by **Scalar**                  |
 | Tests          | Jest (unit, in `tests/`)                                           |
 | Config         | `.env` files loaded by `@nestjs/config`; Prisma CLI read `prisma.config.ts` |
@@ -54,8 +54,8 @@ HTTP request
       │
       ▼
 ┌─────────────────────────────────────────────┐
-│ modules/user-profile                        │
-│  user-profile.controller.ts   (transport)   │
+│ modules/users                        │
+│  users.module.ts        (transport)   │
 │  application/                 (use cases)   │
 │    commands/...                             │
 │    queries/...                              │
@@ -66,8 +66,8 @@ HTTP request
 
 ### CQRS
 
-- **Commands** (write side) are dispatched through the `CommandBus` and handled by command handlers. Example: `CreateUserProfileCommand → CreateUserProfileHandler`.
-- **Queries** (read side) are dispatched through the `QueryBus` and handled by query handlers. Example: `GetUserProfileQuery → GetUserProfileHandler`.
+- **Commands** (write side) are dispatched through the `CommandBus` and handled by command handlers. Example: `CreateUserCommand → CreateUserHandler`.
+- **Queries** (read side) are dispatched through the `QueryBus` and handled by query handlers. Example: `GetUserQuery → GetUserHandler`.
 
 This separation makes the read and write models evolvable independently (read models can later be optimized/denormalized without touching writes).
 
@@ -75,8 +75,10 @@ This separation makes the read and write models evolvable independently (read mo
 
 Handlers depend only on a **repository port** (interface), never on the database driver:
 
-- Port: `UserProfileRepository` (interface) + `USER_PROFILE_REPOSITORY` DI token.
-- Adapter: `PrismaUserProfileRepository` (PostgreSQL via Prisma). It injects the global `PrismaService` and maps between the `UserProfile` domain model and the `user_profiles` record.
+- Port: `UserRepository` (interface) + `USER_REPOSITORY` DI token.
+- Adapter: `PrismaUserRepository` (PostgreSQL via Prisma). It injects the global `PrismaService` and maps between the `User` domain model and the `users` record.
+
+> Timestamps (`createdAt`/`updatedAt`) live on the shared `TimestampedEntity` base class in `src/common/domain/`, so every aggregate gets them for free.
 
 Swapping the storage backend is therefore a **wiring concern**, not a code change across features.
 
@@ -102,37 +104,45 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │   │   ├── routes.module.ts        # Joins every feature module's endpoints
 │   │   └── health.endpoint.ts      # GET /health
 │   ├── common/
-│   │   └── config/app.config.ts    # Typed, centralized env config
+│   │   ├── config/app.config.ts    # Typed, centralized env config
+│   │   └── domain/base-entity.ts   # Timestamped interface + abstract base
 │   └── modules/
-│       └── user-profile/           #  ── VERTICAL SLICE ─────────────
-│           ├── user-profile.module.ts
+│       └── users/                   #  ── VERTICAL SLICE ─────────────
+│           ├── users.module.ts
 │           ├── dto/
-│           │   └── user-profile.response.dto.ts   # Read model (shared)
+│           │   └── user.response.dto.ts   # Read model (shared)
 │           ├── features/
-│           │   ├── create-user-profile/           #  ── FEATURE ────────
-│           │   │   ├── create-user-profile.endpoint.ts  (route: POST)
-│           │   │   ├── create-user-profile.command.ts
-│           │   │   ├── create-user-profile.handler.ts
-│           │   │   └── create-user-profile.dto.ts
-│           │   └── get-user-profile/              #  ── FEATURE ────────
-│           │       ├── get-user-profile.endpoint.ts      (route: GET /:id)
-│           │       ├── get-user-profile.query.ts
-│           │       └── get-user-profile.handler.ts
+│           │   ├── create-user/           #  ── FEATURE ────────
+│           │   │   ├── create-user.endpoint.ts   (route: POST)
+│           │   │   ├── create-user.command.ts
+│           │   │   ├── create-user.handler.ts
+│           │   │   └── create-user.dto.ts
+│           │   ├── get-user/              #  ── FEATURE ────────
+│           │   │   ├── get-user.endpoint.ts        (route: GET /:id)
+│           │   │   ├── get-user.query.ts
+│           │   │   └── get-user.handler.ts
+│           │   └── list-users/            #  ── FEATURE ────────
+│           │       ├── list-users.endpoint.ts      (route: GET /)
+│           │       ├── list-users.query.ts
+│           │       └── list-users.handler.ts
 │           ├── domain/
-│           │   ├── user-profile.ts            (aggregate model)
-│           │   └── user-profile.repository.ts (port INTERFACE + DI token)
+│           │   ├── user.ts              (aggregate model)
+│           │   └── user.repository.ts   (port INTERFACE + DI token)
 │           └── infrastructure/
 │               └── persistence/prisma/       (adapter)
 └── tests/                            #  ── DEDICATED TEST FOLDER ─────
-    └── user-profile/                 # per module
-        ├── create-user-profile/      # per feature (slice)
-        │   ├── create-user-profile.test.ts
-        │   └── create-user-profile.endpoint.test.ts
-        ├── get-user-profile/
-        │   ├── get-user-profile.test.ts
-        │   └── get-user-profile.endpoint.test.ts
+    └── users/                 # per module
+        ├── create-user/      # per feature (slice)
+        │   ├── create-user.test.ts
+        │   └── create-user.endpoint.test.ts
+        ├── get-user/
+        │   ├── get-user.test.ts
+        │   └── get-user.endpoint.test.ts
+        ├── list-users/
+        │   ├── list-users.test.ts
+        │   └── list-users.endpoint.test.ts
         └── repository/               # persistence adapter tests
-            └── prisma-user-profile.repository.test.ts
+            └── prisma-user.repository.test.ts
 ```
 
 ---
@@ -145,7 +155,7 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 npm install
 ```
 
-Prisma Client is generated on install (`prisma generate` via `prisma:generate`). Make sure `.env` exists before generating, so the CLI can resolve the schema (the schema itself only maps the `user_profiles` table).
+Prisma Client is generated on install (`prisma generate` via `prisma:generate`). Make sure `.env` exists before generating, so the CLI can resolve the schema (the schema maps the `users` table).
 
 ### 2. Environment variables
 
@@ -192,13 +202,20 @@ Open **http://localhost:3000/docs** in the browser.
 
 Scalar renders the OpenAPI document generated from the code (`@nestjs/swagger` decorators) and lets you **send real requests** against the running API — no extra setup required.
 
+The `GET /users` endpoint uses `@nestarc/pagination`: its query params (`page`, `limit`, `sortBy`, `search`, `filter.{col}`) are auto-documented, but the `filter.{col}` fields are explicit: `filter.username`, `filter.email`, `filter.bio`, `filter.createdAt` and `filter.updatedAt`. Example:
+
+```
+GET /users?limit=20&sortBy=createdAt:DESC&search=ali&filter.email=$eq:alice@example.com
+```
+
 Current endpoints:
 
-| Method | Path                       | Description          |
-| ------ | -------------------------- | -------------------- |
-| `GET`  | `/health`                  | Service health check |
-| `POST` | `/user-profile`            | Create a user profile |
-| `GET`  | `/user-profile/:id`        | Get a user profile   |
+| Method | Path                       | Description                                     |
+| ------ | -------------------------- | ----------------------------------------------- |
+| `GET`  | `/health`                  | Service health check                            |
+| `POST` | `/users`                   | Create a user                                   |
+| `GET`  | `/users/:id`               | Get a user by id                                |
+| `GET`  | `/users`                   | List users (offset/cursor + filter/sort/search) |
 
 > If you prefer the classic Swagger UI, that's a one-line change in `src/main.ts`.
 
@@ -226,9 +243,9 @@ npm run format
 tests/<module>/<feature-or-slice>/<something>.test.ts
 ```
 
-e.g. `tests/user-profile/create-user-profile/create-user-profile.test.ts`. They are grouped per module and, inside it, per feature/slice (create, get, repository...), each with its own test files.
+e.g. `tests/users/create-user/create-user.test.ts`. They are grouped per module and, inside it, per feature/slice (create, get, list, repository...), each with its own test files.
 
-They mock the repository **interface** (`UserProfileRepository`), the CQRS buses, and — in the adapter test — the `PrismaService` client, so they run **without a real database**.
+They mock the repository **interface** (`UserRepository`), the CQRS buses, and — in the adapter test — the `PrismaService` client, so they run **without a real database**.
 
 ---
 
@@ -292,13 +309,13 @@ npm run migration:run
 npm run migration:run
 ```
 
-> **First migration:** when migrating a database that already has the `user_profiles` table (created earlier by TypeORM auto-sync), reset it first and apply the migrations from scratch instead of mixing histories: `npm run migration:reset` (local) — or drop/recreate and then `npm run migration:run`.
+> **Migrations only:** there is no `prisma db push` / auto-sync in this project. The schema (`prisma/schema.prisma`) is the single source of truth, and every schema change is expressed as a migration in `prisma/migrations/` and applied with `npm run migration:dev` (local) or `npm run migration:run` (dev/prod). A fresh database is bootstrapped by replaying the full migration history with `npm run migration:run`.
 
 ---
 
 ## Environments: local vs dev/prod (Supabase)
 
-Two connection variables, two environments. `.env.example` documents both blocks; `.env` currently holds the dev/prod (Supabase) block so you can validate the connection.
+Two connection variables, two environments. `.env.example` documents both blocks; copy it to `.env` and **uncomment the block you want**, commenting out the other.
 
 | Env       | `DATABASE_URL`                                            | `DIRECT_URL`                                             |
 | --------- | --------------------------------------------------------- | -------------------------------------------------------- |
@@ -308,13 +325,13 @@ Two connection variables, two environments. `.env.example` documents both blocks
 - **Runtime** (`PrismaService`): reads `database.url` → `DATABASE_URL` (pooled, replaces `?pgbouncer=true` handling usually done in code) and passes it to `new PrismaPg(...)`.
 - **CLI** (`prisma.config.ts`): reads `DIRECT_URL ?? DATABASE_URL` for `migrate`/`studio`.
 
-To run against Supabase, replace `TU_PASSWORD_SUPABASE` in `.env` with your Supabase database password (Project Settings → Database). For local development, swap in the local block. The app and the Prisma CLI pick up whichever variables are active in `.env` — no code changes required.
+To run against Supabase, replace `TU_PASSWORD_SUPABASE` in `.env` with your real Supabase database password (Project Settings → Database). For local development, use the LOCAL block (start PostgreSQL first, e.g. `docker compose up -d`). The app and the Prisma CLI pick up whichever variables are active in `.env` — no code changes required.
 
 ---
 
 ## Working on a new feature
 
-1. Create a feature folder under `src/modules/<module>/features/<action>/` (e.g. `delete-user-profile/`).
+1. Create a feature folder under `src/modules/<module>/features/<action>/` (e.g. `delete-user/`).
 2. Inside it add the **command or query**, the **dto**, the **handler**, and the **endpoint** (`@Controller` class — the feature's route).
 3. Write **failing tests** for the handler and the endpoint (mock the repository interface and the CQRS buses).
 4. Implement handlers against the repository **port**.
@@ -330,7 +347,7 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 ## Conventions
 
 - **Code comments are in English**.
-- DTOs carry `class-validator` rules (input safety) and `@nestjs/swagger` decorators (documentation).
+- DTOs carry `class-validator` rules (input safety) and `@nestjs/swagger` decorators (documentation). The `GET /users` listing is auto-documented via `@ApiPaginatedResponse` from `@nestarc/pagination`.
 - Handlers never talk to HTTP or the database driver directly — only through the repository **port** (interface), which is what makes them mockable in tests.
 - Endpoints are thin adapters between HTTP and the CQRS buses.
 - Each feature folder contains its own endpoint, handler, command/query and dto; the read model shared by the whole module lives in the module's `dto/` folder.

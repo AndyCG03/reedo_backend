@@ -8,17 +8,17 @@ datasource db {
   provider = "postgresql"
 }
 
-// Maps the existing `user_profiles` table (v1 of the reading platform).
-// No new tables are introduced here: the schema is the source of truth for
+// Users table (renamed from `user_profiles` in the UserProfile -> User refactor).
+// No extra tables are introduced here: the schema is the source of truth for
 // Prisma Migrate, and the runtime connects via a driver adapter (DATABASE_URL).
-model UserProfile {
-  id          String   @id @db.Uuid
-  username    String   @unique @db.VarChar(30)
-  displayName String   @map("display_name") @db.VarChar(60)
-  bio         String?  @db.VarChar(280)
-  avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+model User {
+  id        String   @id @db.Uuid
+  username  String   @unique @db.VarChar(30)
+  email     String?  @db.VarChar(320)
+  bio       String?  @db.VarChar(280)
+  avatarUrl String?  @map("avatar_url") @db.VarChar(500)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  @@map("user_profiles")
+  @@map("users")
 }

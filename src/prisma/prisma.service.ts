@@ -11,7 +11,7 @@ import { PrismaClient } from '@prisma/client';
  * (the transaction-mode pooler on Supabase, or the direct connection locally).
  *
  * The class is @Global via PrismaModule, so it can be injected into any
- * feature service (e.g. the user-profile repository adapter).
+ * feature service (e.g. the users repository adapter).
  */
 @Injectable()
 export class PrismaService
