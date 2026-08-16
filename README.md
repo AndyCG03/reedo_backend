@@ -22,7 +22,7 @@ Backend for a **reading application**. Built with [NestJS](https://nestjs.com), 
 - [API reference (Scalar)](#api-reference-scalar)
 - [Testing (TDD)](#testing-tdd)
 - [Database migrations](#database-migrations)
-- [Database providers (PostgreSQL → Supabase / Firebase)](#database-providers-postgresql--supabase--firebase)
+- [Environments: local vs dev/prod (Supabase)](#environments-local-vs-devprod-supabase)
 - [Working on a new feature](#working-on-a-new-feature)
 - [Conventions](#conventions)
 
@@ -35,11 +35,11 @@ Backend for a **reading application**. Built with [NestJS](https://nestjs.com), 
 | Runtime        | Node.js 22+, TypeScript 5+                                          |
 | Framework      | NestJS 11                                                           |
 | CQRS           | `@nestjs/cqrs` (CommandBus / QueryBus)                              |
-| Database       | PostgreSQL via TypeORM (see [providers](#database-providers-postgresql--supabase--firebase)) |
+| Database       | PostgreSQL via **Prisma ORM 7** (`@prisma/client` + `@prisma/adapter-pg`) |
 | Validation     | `class-validator` + global `ValidationPipe`                         |
 | API docs/test  | OpenAPI (`@nestjs/swagger`) rendered by **Scalar**                  |
 | Tests          | Jest (unit, in `tests/`)                                           |
-| Config         | `.env` files loaded by `@nestjs/config`                             |
+| Config         | `.env` files loaded by `@nestjs/config`; Prisma CLI read `prisma.config.ts` |
 
 ---
 
@@ -76,7 +76,7 @@ This separation makes the read and write models evolvable independently (read mo
 Handlers depend only on a **repository port** (interface), never on the database driver:
 
 - Port: `UserProfileRepository` (interface) + `USER_PROFILE_REPOSITORY` DI token.
-- Adapter: `TypeOrmUserProfileRepository` (PostgreSQL). Future adapters (Supabase, Firebase) implement the same port.
+- Adapter: `PrismaUserProfileRepository` (PostgreSQL via Prisma). It injects the global `PrismaService` and maps between the `UserProfile` domain model and the `user_profiles` record.
 
 Swapping the storage backend is therefore a **wiring concern**, not a code change across features.
 
@@ -89,18 +89,20 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 ├── docker-compose.yml              # Local PostgreSQL for development
 ├── .env                            # Local env values (git-ignored)
 ├── .env.example                    # Documented env template (commit this)
+├── prisma/
+│   └── schema.prisma               # Prisma schema (models + datasource)
+├── prisma.config.ts                # Prisma CLI configuration (env, migrations)
 ├── src/
 │   ├── main.ts                     # Bootstrap: pipes, OpenAPI, Scalar UI
-│   ├── app.module.ts               # Root module (config + database + routes)
+│   ├── app.module.ts               # Root module (config + Prisma + routes)
+│   ├── prisma/
+│   │   ├── prisma.module.ts        # Global Prisma module
+│   │   └── prisma.service.ts       # PrismaClient + pg driver adapter
 │   ├── routes/                     #  ── GENERAL ENDPOINT MAPPER ─────
 │   │   ├── routes.module.ts        # Joins every feature module's endpoints
 │   │   └── health.endpoint.ts      # GET /health
 │   ├── common/
-│   │   ├── config/app.config.ts   # Typed, centralized env config
-│   │   └── database/
-│   │       ├── database.module.ts # Global TypeORM connection module
-│   │       ├── data-source.ts     # TypeORM CLI data source (migrations)
-│   │       └── migrations/        # Generated migration files
+│   │   └── config/app.config.ts    # Typed, centralized env config
 │   └── modules/
 │       └── user-profile/           #  ── VERTICAL SLICE ─────────────
 │           ├── user-profile.module.ts
@@ -120,7 +122,7 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │           │   ├── user-profile.ts            (aggregate model)
 │           │   └── user-profile.repository.ts (port INTERFACE + DI token)
 │           └── infrastructure/
-│               └── persistence/typeorm/       (entity + adapter)
+│               └── persistence/prisma/       (adapter)
 └── tests/                            #  ── DEDICATED TEST FOLDER ─────
     └── user-profile/                 # per module
         ├── create-user-profile/      # per feature (slice)
@@ -130,7 +132,7 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
         │   ├── get-user-profile.test.ts
         │   └── get-user-profile.endpoint.test.ts
         └── repository/               # persistence adapter tests
-            └── typeorm-user-profile.repository.test.ts
+            └── prisma-user-profile.repository.test.ts
 ```
 
 ---
@@ -143,6 +145,8 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 npm install
 ```
 
+Prisma Client is generated on install (`prisma generate` via `prisma:generate`). Make sure `.env` exists before generating, so the CLI can resolve the schema (the schema itself only maps the `user_profiles` table).
+
 ### 2. Environment variables
 
 Copy the template and adjust values:
@@ -151,31 +155,26 @@ Copy the template and adjust values:
 cp .env.example .env
 ```
 
-All runtime configuration is read from the `.env` file. Key variables:
+Prisma 7 no longer reads the connection from `schema.prisma` — the runtime connection is injected through a **driver adapter** (`@prisma/adapter-pg`) in `PrismaService`, and the CLI connection comes from `prisma.config.ts`.
 
-| Variable            | Default         | Purpose                                      |
-| ------------------- | --------------- | -------------------------------------------- |
-| `PORT`              | `3000`          | HTTP port                                    |
-| `DOCS_PATH`         | `docs`          | Public path of the Scalar API reference      |
-| `DATABASE_PROVIDER` | `postgres`      | Storage backend selector (see providers)     |
-| `DB_HOST`           | `localhost`     | PostgreSQL host                              |
-| `DB_PORT`           | `5432`          | PostgreSQL port                              |
-| `DB_USERNAME`       | `postgres`      | PostgreSQL user                              |
-| `DB_PASSWORD`       | `postgres`      | PostgreSQL password                          |
-| `DB_DATABASE`       | `reading_platform` | Database name                             |
-| `DB_SYNCHRONIZE`    | `true`          | Auto-sync schema on boot (dev only)          |
-| `DB_MIGRATIONS_RUN` | `false`         | Apply pending migrations at boot (CI/prod)   |
-| `DB_SSL`            | `false`         | Enable SSL (required by Supabase)            |
+| Variable        | Purpose                                                                 |
+| --------------- | ----------------------------------------------------------------------- |
+| `PORT`          | HTTP port (default `3000`)                                              |
+| `DOCS_PATH`     | Public path of the Scalar API reference (default `docs`)                |
+| `DATABASE_URL`  | Runtime connection used by Prisma Client (pooled URL on Supabase)       |
+| `DIRECT_URL`    | Direct/session connection used by the Prisma CLI for migrations         |
+
+`.env.example` documents **both** environments — the local block and the dev/prod (Supabase) block. See [Environments](#environments-local-vs-devprod-supabase).
 
 ### 3. Run PostgreSQL
 
-Using Docker:
+Using Docker (local only):
 
 ```bash
 docker compose up -d
 ```
 
-This starts PostgreSQL 17 on `localhost:5432` matching the default `.env` values. Alternatively point `DB_*` at any existing PostgreSQL instance.
+This starts PostgreSQL 17 on `localhost:5432`. Point `DATABASE_URL`/`DIRECT_URL` at it for local development, or use the Supabase block for dev/prod.
 
 ### 4. Start the API
 
@@ -229,98 +228,53 @@ tests/<module>/<feature-or-slice>/<something>.test.ts
 
 e.g. `tests/user-profile/create-user-profile/create-user-profile.test.ts`. They are grouped per module and, inside it, per feature/slice (create, get, repository...), each with its own test files.
 
-They mock the repository **interface** (`UserProfileRepository`) and the CQRS buses, so they run **without a database**.
+They mock the repository **interface** (`UserProfileRepository`), the CQRS buses, and — in the adapter test — the `PrismaService` client, so they run **without a real database**.
 
 ---
 
 ## Database migrations
 
-There are two ways to manage the schema. **Do not combine them** on the same environment/database:
-
-| Mode                   | Configuration                      | When to use                                     |
-| ---------------------- | ---------------------------------- | ----------------------------------------------- |
-| Auto-sync              | `DB_SYNCHRONIZE=true` (default)    | Rapid local development only                    |
-| Versioned migrations   | `DB_SYNCHRONIZE=false`             | CI, staging and production (controlled changes) |
-
-Migrations are TypeORM versions of the schema stored in `src/common/database/migrations/` (the committed `InitSchema...` migration is a reference). The CLI connects through `src/common/database/data-source.ts`, which reuses the same `.env` settings as the app.
-
-Commands:
+Schema changes are managed by **Prisma Migrate**. Migrations are stored in `prisma/migrations/` (committed to the repo) and applied against the database pointed to by `DIRECT_URL` (see `prisma.config.ts`).
 
 ```bash
-# Generate a migration by diffing the entities against the current DB schema
-npm run migration:generate -- src/common/database/migrations/AddBooks
+# Generate a new migration from schema changes (writes the migration file only)
+npm run migration:generate
 
-# Apply all pending migrations
+# Apply all pending migrations (deploy/CI)
 npm run migration:run
 
-# Revert the last applied migration
-npm run migration:revert
+# Interactive dev migration (generates + applies)
+npm run migration:dev
 
-# List applied / pending migrations
-npm run migration:show
+# Reset the database and re-apply all migrations
+npm run migration:reset
+
+# Show applied / pending migrations
+npm run migration:status
+
+# Inspect data with Prisma Studio
+npm run prisma:studio
 ```
 
-All commands read the connection from `.env`. To target another database, override inline, e.g. `DB_DATABASE=staging npm run migration:run`.
+Because `prisma migrate` needs a session-mode (direct) connection — PgBouncer in transaction mode breaks it — `prisma.config.ts` resolves the CLI connection from `DIRECT_URL` (the Supabase session pooler at port `5432`), while the runtime uses `DATABASE_URL` (the transaction pooler at port `6543`).
 
-Two important notes:
-
-- **Always review a generated migration** before applying it — TypeORM diffing is smart but not perfect.
-- Every entity must be registered in `src/common/database/data-source.ts`. Unlike the runtime module (which uses `autoLoadEntities`), the CLI cannot discover entities automatically. Keep the list in sync when adding slices.
-
-> **Pitfall:** if a dev database was already created with `DB_SYNCHRONIZE=true`, the initial `InitSchema` migration will conflict (`user_profiles` table already exists). Drop and recreate the database before migrating, or keep auto-sync on that environment.
+> **First migration:** if the database already has the `user_profiles` table (created earlier by TypeORM auto-sync), run `npm run migration:dev` to create the baseline from the schema. On a fresh database, `npm run migration:generate` + `npm run migration:run` applies it from scratch.
 
 ---
 
-## Database providers (PostgreSQL → Supabase / Firebase)
+## Environments: local vs dev/prod (Supabase)
 
-The storage backend is selectable through `DATABASE_PROVIDER`. Adapters live under `src/modules/<feature>/infrastructure/persistence/<provider>/` and are bound to the repository **port** (e.g. `USER_PROFILE_REPOSITORY`) by the slice module. The domain and application layers never change.
+Two connection variables, two environments. `.env.example` documents both blocks; `.env` currently holds the dev/prod (Supabase) block so you can validate the connection.
 
-### Switching to Supabase
+| Env       | `DATABASE_URL`                                            | `DIRECT_URL`                                             |
+| --------- | --------------------------------------------------------- | -------------------------------------------------------- |
+| **LOCAL** | `postgresql://postgres:postgres@localhost:5432/reading_platform` | same URL, direct connection                     |
+| **DEV/PROD** | `postgresql://postgres.<ref>@aws-0-ca-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true` (transaction pooler) | `postgresql://postgres.<ref>@aws-0-ca-central-1.pooler.supabase.com:5432/postgres` (session pooler) |
 
-Supabase exposes a **plain PostgreSQL endpoint**, so the TypeORM adapter stays as-is. Only the connection changes:
+- **Runtime** (`PrismaService`): reads `database.url` → `DATABASE_URL` (pooled, replaces `?pgbouncer=true` handling usually done in code) and passes it to `new PrismaPg(...)`.
+- **CLI** (`prisma.config.ts`): reads `DIRECT_URL ?? DATABASE_URL` for `migrate`/`studio`.
 
-1. In `.env`, set `DATABASE_PROVIDER=supabase` and point the `DB_*` variables at the Supabase connection settings (host, port — `5432` direct or `6543` via pgBouncer, user `postgres`, database password, database name) and set `DB_SSL=true`.
-2. Apply the schema with `npm run migration:run` (or drop `reading_platform` and run the InitSchema migration fresh).
-3. Done — no code changes. Because Supabase is PostgreSQL, `UserProfileEntity` and `TypeOrmUserProfileRepository` work unchanged.
-
-### Switching to Firebase
-
-Firestore is not SQL, so each slice needs a **new adapter** implementing the same port:
-
-1. Create `src/modules/user-profile/infrastructure/persistence/firebase/firebase-user-profile.repository.ts` implementing `UserProfileRepository`. It persists the same `UserProfile` domain model through the Firestore SDK. The TypeORM entity and its `fromDomain`/`toDomain` methods are TypeORM-only and are **not** reused.
-2. Install `firebase-admin`, initialize it with credentials exposed via a `FIREBASE_*` env block, and add a provider for it (e.g. in the slice module or `src/common/firebase/`).
-3. In `src/modules/user-profile/user-profile.module.ts`, extend the `USER_PROFILE_REPOSITORY` factory to return the new adapter:
-
-```ts
-{
-  provide: USER_PROFILE_REPOSITORY,
-  useFactory: (config: ConfigService, postgres: TypeOrmUserProfileRepository, firebase: FirebaseUserProfileRepository) => {
-    const provider = config.get<string>('database.provider') ?? 'postgres';
-    switch (provider) {
-      case 'postgres':
-      case 'supabase':
-        return postgres;
-      case 'firebase':
-        return firebase;
-      default:
-        throw new Error(`Unsupported DATABASE_PROVIDER "${provider}".`);
-    }
-  },
-  inject: [ConfigService, TypeOrmUserProfileRepository, FirebaseUserProfileRepository],
-}
-```
-
-4. Uniqueness of `username` on Firebase: the `CreateUserProfileHandler` already guards it with `findByUsername` before writing (business rule), since Firestore has no unique constraint like PostgreSQL.
-
-What changes per provider — summary:
-
-| Thing                          | Supabase                    | Firebase                       |
-| ------------------------------ | --------------------------- | ------------------------------ |
-| DB connection (`.env`)         | `DB_*` + `DB_SSL=true`      | `FIREBASE_*` credentials       |
-| Repository adapter per slice   | reuse TypeORM               | new `FirebaseUserProfileRepository` |
-| Schema management             | TypeORM migrations (SQL)    | Firestore is schemaless        |
-| `data-source.ts` / `migrations`| unchanged                  | not used                       |
-| Domain + application code      | unchanged                  | unchanged                     |
+To run against Supabase, replace `TU_PASSWORD_SUPABASE` in `.env` with your Supabase database password (Project Settings → Database). For local development, swap in the local block. The app and the Prisma CLI pick up whichever variables are active in `.env` — no code changes required.
 
 ---
 
@@ -332,10 +286,10 @@ What changes per provider — summary:
 4. Implement handlers against the repository **port**.
 5. Register the new endpoint in the feature module's `controllers` and the handler in its `providers`.
 6. The module is already joined to the HTTP layer through `src/routes/routes.module.ts` — only new **modules** need to be imported there.
-7. If the feature adds entities, register them in `src/common/database/data-source.ts` and generate a migration (see [Database migrations](#database-migrations)).
+7. If the feature adds a table/column, add the model to `prisma/schema.prisma`, run `npm run prisma:generate` and generate a migration (see [Database migrations](#database-migrations)).
 8. Add tests under `tests/<module>/<feature>/`.
 
-Keep each slice self-contained; shared code that is truly cross-cutting belongs in `src/common/` (e.g. config, database).
+Keep each slice self-contained; shared code that is truly cross-cutting belongs in `src/common/` (e.g. config) or `src/prisma/` (the Prisma client module).
 
 ---
 
@@ -347,6 +301,7 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 - Endpoints are thin adapters between HTTP and the CQRS buses.
 - Each feature folder contains its own endpoint, handler, command/query and dto; the read model shared by the whole module lives in the module's `dto/` folder.
 - `src/routes/routes.module.ts` is the general endpoint mapper: it joins the endpoints of every feature/module.
-- Tests live in the dedicated `tests/` folder (per module → per feature/slice) and use `*.test.ts`; the repository **interface** and the CQRS buses make every test run without a database.
-- Auto-sync (`DB_SYNCHRONIZE=true`) is for local development only. Use [versioned migrations](#database-migrations) for anything that needs a controlled schema.
+- Tests live in the dedicated `tests/` folder (per module → per feature/slice) and use `*.test.ts`; the repository **interface**, the CQRS buses and the mocked `PrismaService` make every test run without a database.
+- Persistence goes through **Prisma** only: `src/prisma/prisma.service.ts` is the single PrismaClient instance, injected via the `@Global()` `PrismaModule`.
+- Schema changes always go through [Prisma Migrate](#database-migrations) — never rely on implicit auto-sync (there is none in Prisma).
 - `.env` is git-ignored; commit only `.env.example`.

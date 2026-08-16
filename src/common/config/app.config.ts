@@ -11,22 +11,17 @@ export default () => ({
   docsPath: process.env.DOCS_PATH ?? 'docs',
   database: {
     /**
-     * Storage backend selector. Lets us swap between local Postgres and a
-     * managed provider (Supabase / Firebase) without touching feature code:
-     * only the persistence adapter changes for the chosen provider.
+     * Runtime connection string consumed by Prisma Client through the `pg`
+     * driver adapter. In dev/prod it points to the Supabase transaction
+     * pooler (port 6543, pgbouncer); locally it points at the direct
+     * PostgreSQL connection.
      */
-    provider: process.env.DATABASE_PROVIDER ?? 'postgres',
-    host: process.env.DB_HOST ?? 'localhost',
-    port: parseInt(process.env.DB_PORT ?? '5432', 10),
-    username: process.env.DB_USERNAME ?? 'postgres',
-    password: process.env.DB_PASSWORD ?? 'postgres',
-    database: process.env.DB_DATABASE ?? 'reading_platform',
-    synchronize: process.env.DB_SYNCHRONIZE === 'true',
+    url: process.env.DATABASE_URL,
     /**
-     * Whether to apply pending migrations automatically at boot. Off by
-     * default: migrations are usually run explicitly via the CLI scripts.
+     * Direct/session-mode connection used by the Prisma CLI for migrations
+     * against poolers (Supabase port 5432). Falls back to the runtime URL
+     * for local setups where both point at the same database.
      */
-    migrationsRun: process.env.DB_MIGRATIONS_RUN === 'true',
-    ssl: process.env.DB_SSL === 'true',
+    directUrl: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
   },
 });

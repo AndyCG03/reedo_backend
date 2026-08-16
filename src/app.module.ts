@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import appConfig from './common/config/app.config';
-import { DatabaseModule } from './common/database/database.module';
+import { PrismaModule } from './prisma/prisma.module';
 import { RoutesModule } from './routes/routes.module';
 
 @Module({
@@ -10,7 +10,7 @@ import { RoutesModule } from './routes/routes.module';
       isGlobal: true,
       load: [appConfig],
     }),
-    DatabaseModule,
+    PrismaModule,
     RoutesModule,
   ],
 })
