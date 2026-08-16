@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/express-api-reference';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule);
@@ -16,6 +17,9 @@ async function bootstrap(): Promise<void> {
       transform: true,
     }),
   );
+
+  // Surface the reason of any unhandled error (see AllExceptionsFilter).
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Build the OpenAPI document that Scalar will render.
   const swaggerConfig = new DocumentBuilder()
