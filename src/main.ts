@@ -29,7 +29,7 @@ async function bootstrap(): Promise<void> {
         'Vertical Slice Architecture, CQRS and TDD.',
     )
     .setVersion('1.0.0')
-    .addTag('users')
+    .addTag('user-profile')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
 

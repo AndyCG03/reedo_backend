@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { UsersModule } from '../modules/users/users.module';
+import { UserProfileModule } from '../modules/user-profile/user-profile.module';
 import { HealthEndpoint } from './health.endpoint';
 
 /**
@@ -10,7 +10,7 @@ import { HealthEndpoint } from './health.endpoint';
  * register it here (and add its module to the imports array).
  */
 @Module({
-  imports: [UsersModule],
+  imports: [UserProfileModule],
   controllers: [HealthEndpoint],
 })
 export class RoutesModule {}
