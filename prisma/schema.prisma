@@ -1,4 +1,7 @@
 // prisma/schema.prisma
+//
+// Generator and datasource configuration only.
+// Models are defined in prisma/models/*.prisma
 
 generator client {
   provider = "prisma-client-js"
@@ -6,19 +9,4 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-}
-
-// Users table (renamed from `user_profiles` in the UserProfile -> User refactor).
-// No extra tables are introduced here: the schema is the source of truth for
-// Prisma Migrate, and the runtime connects via a driver adapter (DATABASE_URL).
-model User {
-  id        String   @id @db.Uuid
-  username  String   @unique @db.VarChar(30)
-  email     String?  @db.VarChar(320)
-  bio       String?  @db.VarChar(280)
-  avatarUrl String?  @map("avatar_url") @db.VarChar(500)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("users")
 }
