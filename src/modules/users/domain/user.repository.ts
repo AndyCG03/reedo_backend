@@ -1,8 +1,4 @@
-import type {
-  CursorPaginated,
-  Paginated,
-  PaginateQuery,
-} from '@nestarc/pagination';
+import type { PaginatedResult, SieveOptions } from '../../../common/sieve';
 import { User } from './user';
 
 /**
@@ -16,15 +12,10 @@ export const USER_REPOSITORY = Symbol('USER_REPOSITORY');
  * Application/handler code depends on this interface only. Concrete adapters
  * (Prisma/PostgreSQL now, others later) live in the
  * infrastructure folder and are bound to this token by the slice module.
- *
- * The listing method follows the @nestarc/pagination query contract so that
- * filtering, sorting and pagination stay agnostic to the storage layer.
  */
 export interface UserRepository {
   create(user: User): Promise<User>;
   findById(id: string): Promise<User | null>;
   findByUsername(username: string): Promise<User | null>;
-  findMany(
-    query: PaginateQuery,
-  ): Promise<Paginated<User> | CursorPaginated<User>>;
+  findMany(query: SieveOptions): Promise<PaginatedResult<User>>;
 }

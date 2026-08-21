@@ -1,13 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import {
-  paginate,
-  type CursorPaginated,
-  type Paginated,
-  type PaginateQuery,
-} from '@nestarc/pagination';
 import { PrismaService } from '../../../../../prisma/prisma.service';
 import { User } from '../../../domain/user';
 import type { UserRepository } from '../../../domain/user.repository';
+import type {
+  PaginatedResult,
+  SieveOptions,
+} from '../../../../../common/sieve/sieve-options';
+import { PrismaSieve } from '../../../../../common/sieve/prisma-sieve';
+import { UserSieveConfig } from './user.sieve';
 
 /**
  * PostgreSQL (Prisma) adapter for the user repository port.
@@ -42,26 +42,26 @@ export class PrismaUserRepository implements UserRepository {
     return record ? this.toDomain(record) : null;
   }
 
-  public async findMany(
-    query: PaginateQuery,
-  ): Promise<Paginated<User> | CursorPaginated<User>> {
-    // Column/operator whitelist kept here on the adapter: it references Prisma
-    // column names and is the persistence detail the handler never sees.
-    const result = await paginate(query, this.prisma.user, {
-      sortableColumns: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
-      defaultSortBy: [['createdAt', 'DESC']],
-      searchableColumns: ['username', 'email'],
-      filterableColumns: {
-        username: ['$eq', '$ne', '$ilike', '$in', '$nin'],
-        email: ['$eq', '$ne', '$ilike', '$in', '$nin', '$null', '$not:null'],
-        bio: ['$eq', '$ne', '$ilike', '$null', '$not:null'],
-        createdAt: ['$gt', '$gte', '$lt', '$lte', '$btw', '$null', '$not:null'],
-        updatedAt: ['$gt', '$gte', '$lt', '$lte', '$btw', '$null', '$not:null'],
-      },
-    });
+  public async findMany(sieve: SieveOptions): Promise<PaginatedResult<User>> {
+    const { where, orderBy, skip, take } = PrismaSieve.build(
+      sieve,
+      UserSieveConfig,
+    );
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ where, orderBy, skip, take }),
+      this.prisma.user.count({ where }),
+    ]);
+
     return {
-      ...result,
-      data: result.data.map((record) => this.toDomain(record)),
+      data: data.map((record) => this.toDomain(record)),
+      meta: {
+        total,
+        page: sieve.page,
+        pageSize: sieve.pageSize,
+        totalPages: Math.ceil(total / sieve.pageSize),
+        lastPage: Math.ceil(total / sieve.pageSize),
+      },
     };
   }
 

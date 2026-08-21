@@ -10,6 +10,7 @@ describe('PrismaUserRepository', () => {
       findMany: jest.Mock;
       count: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
   let adapter: PrismaUserRepository;
 
@@ -21,6 +22,7 @@ describe('PrismaUserRepository', () => {
         findMany: jest.fn(),
         count: jest.fn(),
       },
+      $transaction: jest.fn(),
     };
     adapter = new PrismaUserRepository(prisma as unknown as PrismaService);
   });
@@ -132,7 +134,7 @@ describe('PrismaUserRepository', () => {
   });
 
   describe('findMany', () => {
-    it('delegates to the pagination engine and maps records to the domain', async () => {
+    it('delegates to PrismaSieve and maps records to the domain', async () => {
       const record = {
         id: '68f6c1d1-9d58-4e1c-9d61-0d6c0f0f2f3a',
         username: 'bookworm',
@@ -144,11 +146,11 @@ describe('PrismaUserRepository', () => {
       };
       prisma.user.findMany.mockResolvedValue([record]);
       prisma.user.count.mockResolvedValue(1);
+      prisma.$transaction.mockResolvedValue([[record], 1]);
 
-      const result = await adapter.findMany({ path: '/users' });
+      const result = await adapter.findMany({ page: 1, pageSize: 20 });
 
-      expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
-      expect(prisma.user.count).toHaveBeenCalledTimes(1);
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
       expect(result.data[0]).toEqual(
         new User(
           record.id,
@@ -160,6 +162,9 @@ describe('PrismaUserRepository', () => {
           record.updatedAt,
         ),
       );
+      expect(result.meta.total).toBe(1);
+      expect(result.meta.page).toBe(1);
+      expect(result.meta.pageSize).toBe(20);
     });
   });
 });

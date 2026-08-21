@@ -3,7 +3,7 @@ import type { UserRepository } from '../../../src/modules/users/domain/user.repo
 import { ListUsersQuery } from '../../../src/modules/users/features/list-users/list-users.query';
 import { ListUsersHandler } from '../../../src/modules/users/features/list-users/list-users.handler';
 import { UserResponseDto } from '../../../src/modules/users/dto/user.response.dto';
-import type { Paginated } from '@nestarc/pagination';
+import type { PaginatedResult } from '../../../src/common/sieve';
 
 describe('ListUsersHandler', () => {
   let handler: ListUsersHandler;
@@ -27,37 +27,29 @@ describe('ListUsersHandler', () => {
       bio: null,
       avatarUrl: null,
     });
-    const paginated: Paginated<User> = {
+    const paginated: PaginatedResult<User> = {
       data: [user],
       meta: {
-        itemsPerPage: 20,
-        currentPage: 1,
-        totalItems: 1,
+        total: 1,
+        page: 1,
+        pageSize: 20,
         totalPages: 1,
-        sortBy: [['createdAt', 'DESC']],
-      },
-      links: {
-        first: '/users?page=1&limit=20',
-        previous: null,
-        current: '/users',
-        next: null,
-        last: '/users?page=1&limit=20',
+        lastPage: 1,
       },
     };
     repository.findMany.mockResolvedValue(paginated);
 
     const result = await handler.execute(
-      new ListUsersQuery({ path: '/users' }),
+      new ListUsersQuery({ page: 1, pageSize: 20 }),
     );
 
-    expect(repository.findMany).toHaveBeenCalledWith({ path: '/users' });
+    expect(repository.findMany).toHaveBeenCalledWith({ page: 1, pageSize: 20 });
     expect(result.data[0]).toBeInstanceOf(UserResponseDto);
     expect(result.data[0]).toMatchObject({
       id: user.id,
       username: 'bookworm',
       email: 'bookworm@example.com',
     });
-    expect(result.meta.totalItems).toBe(1);
-    expect(result.links.current).toBe('/users');
+    expect(result.meta.total).toBe(1);
   });
 });

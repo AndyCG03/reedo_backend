@@ -1,11 +1,11 @@
-import type { PaginateQuery } from '@nestarc/pagination';
+import type { SieveOptions } from '../../../../common/sieve/sieve-options';
 
 /**
- * Query: list users with offset/cursor pagination, filtering and sorting.
+ * Query: list users with pagination, filtering and sorting.
  *
- * Carries the parsed @nestarc/pagination query so the storage layer can build
+ * Carries the parsed SieveOptions so the storage layer can build
  * a filtered query without leaking HTTP concerns into the domain.
  */
 export class ListUsersQuery {
-  public constructor(public readonly query: PaginateQuery) {}
+  public constructor(public readonly query: SieveOptions) {}
 }

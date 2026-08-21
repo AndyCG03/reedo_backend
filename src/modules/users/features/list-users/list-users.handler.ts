@@ -1,4 +1,4 @@
-import type { CursorPaginated, Paginated } from '@nestarc/pagination';
+import type { PaginatedResult } from '../../../../common/sieve';
 import { Inject } from '@nestjs/common';
 import { IQueryHandler, QueryHandler } from '@nestjs/cqrs';
 import {
@@ -12,7 +12,7 @@ import { ListUsersQuery } from './list-users.query';
  * Read side of the list-users feature.
  *
  * Reads through the repository interface (mockable in tests) and returns the
- * same paginated envelope, mapping each entity to its projection DTO.
+ * paginated envelope, mapping each entity to its projection DTO.
  */
 @QueryHandler(ListUsersQuery)
 export class ListUsersHandler implements IQueryHandler<ListUsersQuery> {
@@ -22,7 +22,7 @@ export class ListUsersHandler implements IQueryHandler<ListUsersQuery> {
 
   public async execute(
     query: ListUsersQuery,
-  ): Promise<Paginated<UserResponseDto> | CursorPaginated<UserResponseDto>> {
+  ): Promise<PaginatedResult<UserResponseDto>> {
     const page = await this.repository.findMany(query.query);
     return {
       ...page,

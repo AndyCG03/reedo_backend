@@ -1,23 +1,15 @@
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import {
-  ApiPaginatedResponse,
-  Paginate,
-  type PaginateQuery,
-} from '@nestarc/pagination';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Controller, Get } from '@nestjs/common';
 import { QueryBus } from '@nestjs/cqrs';
-import { UserResponseDto } from '../../dto/user.response.dto';
+import { Sieve } from '../../../../common/sieve/sieve.decorator';
+import type { SieveOptions } from '../../../../common/sieve/sieve-options';
 import { ListUsersQuery } from './list-users.query';
 
 /**
  * HTTP endpoint (GET /users) for the list-users feature.
  *
- * The @Paginate() decorator parses page/limit/sortBy/search/filter.* query
- * parameters into a PaginateQuery object that is forwarded to the handler.
- *
- * @ApiPaginatedResponse (from @nestarc/pagination) auto-documents the
- * paginated envelope and its filter/sort/search query capabilities in the
- * OpenAPI document rendered by Scalar.
+ * The @Sieve() decorator parses page/pageSize/filters/sorts query
+ * parameters into a SieveOptions object that is forwarded to the handler.
  */
 @ApiTags('users')
 @Controller('users')
@@ -26,18 +18,31 @@ export class ListUsersEndpoint {
 
   @Get()
   @ApiOperation({ summary: 'List users (pagination, filtering, sorting)' })
-  @ApiPaginatedResponse(UserResponseDto, {
-    sortableColumns: ['id', 'username', 'email', 'createdAt', 'updatedAt'],
-    searchableColumns: ['username', 'email'],
-    filterableColumns: {
-      username: ['$eq', '$ne', '$ilike', '$in', '$nin'],
-      email: ['$eq', '$ne', '$ilike', '$in', '$nin', '$null', '$not:null'],
-      bio: ['$eq', '$ne', '$ilike', '$null', '$not:null'],
-      createdAt: ['$gt', '$gte', '$lt', '$lte', '$btw', '$null', '$not:null'],
-      updatedAt: ['$gt', '$gte', '$lt', '$lte', '$btw', '$null', '$not:null'],
-    },
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (default: 1)',
   })
-  public listUsers(@Paginate() query: PaginateQuery) {
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: 'Items per page (default: 20, max: 100)',
+  })
+  @ApiQuery({
+    name: 'filters',
+    required: false,
+    type: String,
+    description: 'Filters shorthand, e.g. name==John,price>100',
+  })
+  @ApiQuery({
+    name: 'sorts',
+    required: false,
+    type: String,
+    description: 'Sort fields, e.g. createdAt:desc,name:asc',
+  })
+  public listUsers(@Sieve() query: SieveOptions) {
     return this.queryBus.execute(new ListUsersQuery(query));
   }
 }
