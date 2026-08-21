@@ -25,6 +25,7 @@ Backend for a **reading application**. Built with [NestJS](https://nestjs.com), 
 - [Environments: local vs dev/prod (Supabase)](#environments-local-vs-devprod-supabase)
 - [Working on a new feature](#working-on-a-new-feature)
 - [Conventions](#conventions)
+- [Documentation](#documentation)
 
 ---
 
@@ -36,7 +37,7 @@ Backend for a **reading application**. Built with [NestJS](https://nestjs.com), 
 | Framework      | NestJS 11                                                           |
 | ORM/CQRS       | Prisma 7 (`@prisma/client` + `@prisma/adapter-pg`) + `@nestjs/cqrs`  |
 | Validation     | `class-validator` + global `ValidationPipe`                         |
-| Pagination     | `@nestarc/pagination` (offset + cursor, filtering, sorting)         |
+| Pagination     | Custom PrismaSieve (`src/common/sieve/`) — filter, sort, paginate  |
 | API docs/test  | OpenAPI (`@nestjs/swagger`) rendered by **Scalar**                  |
 | Tests          | Jest (unit, in `tests/`)                                           |
 | Config         | `.env` files loaded by `@nestjs/config`; Prisma CLI read `prisma.config.ts` |
@@ -92,7 +93,9 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 ├── .env                            # Local env values (git-ignored)
 ├── .env.example                    # Documented env template (commit this)
 ├── prisma/
-│   └── schema.prisma               # Prisma schema (models + datasource)
+│   ├── schema.prisma               # Prisma schema (generator + datasource only)
+│   └── models/                     # One .prisma file per entity
+│       └── user.prisma             # User model
 ├── prisma.config.ts                # Prisma CLI configuration (env, migrations)
 ├── src/
 │   ├── main.ts                     # Bootstrap: pipes, OpenAPI, Scalar UI
@@ -105,7 +108,13 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │   │   └── health.endpoint.ts      # GET /health
 │   ├── common/
 │   │   ├── config/app.config.ts    # Typed, centralized env config
-│   │   └── domain/base-entity.ts   # Timestamped interface + abstract base
+│   │   ├── domain/base-entity.ts   # Timestamped interface + abstract base
+│   │   └── sieve/                  #  ── CUSTOM SIEVE (pagination/filter/sort)
+│   │       ├── index.ts
+│   │       ├── sieve-options.ts    # SieveOptions, PaginatedResult interfaces
+│   │       ├── prisma-sieve.config.ts  # PrismaFieldConfig, PrismaSieveConfig
+│   │       ├── prisma-sieve.ts     # Builder: SieveOptions → Prisma where/orderBy
+│   │       └── sieve.decorator.ts  # @Sieve() param decorator + parseSieveQuery
 │   └── modules/
 │       └── users/                   #  ── VERTICAL SLICE ─────────────
 │           ├── users.module.ts
@@ -130,7 +139,15 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │           │   └── user.repository.ts   (port INTERFACE + DI token)
 │           └── infrastructure/
 │               └── persistence/prisma/       (adapter)
+├── docs/
+│   └── custom-sieve/                #  ── SIEVE DOCUMENTATION ────────
+│       ├── usage.md                 # How to use from the frontend
+│       ├── implementation.md        # Internal implementation details
+│       └── implement-new-entity-guide.md  # Step-by-step guide
 └── tests/                            #  ── DEDICATED TEST FOLDER ─────
+    ├── common/sieve/                 # sieve unit tests
+    │   ├── prisma-sieve.test.ts
+    │   └── sieve.decorator.test.ts
     └── users/                 # per module
         ├── create-user/      # per feature (slice)
         │   ├── create-user.test.ts
@@ -202,11 +219,22 @@ Open **http://localhost:3000/docs** in the browser.
 
 Scalar renders the OpenAPI document generated from the code (`@nestjs/swagger` decorators) and lets you **send real requests** against the running API — no extra setup required.
 
-The `GET /users` endpoint uses `@nestarc/pagination`: its query params (`page`, `limit`, `sortBy`, `search`, `filter.{col}`) are auto-documented, but the `filter.{col}` fields are explicit: `filter.username`, `filter.email`, `filter.bio`, `filter.createdAt` and `filter.updatedAt`. Example:
+The `GET /users` endpoint uses the custom **PrismaSieve** system. Query params:
+
+| Param     | Ejemplo                                    | Descripción                                  |
+| --------- | ------------------------------------------ | -------------------------------------------- |
+| `page`    | `?page=2`                                  | Número de página (default: 1)                |
+| `pageSize`| `?pageSize=10`                             | Items por página (default: 20, max: 100)     |
+| `filters` | `?filters=username==book,email@=example`   | Filtros shorthand (`campo<operador>valor`)   |
+| `sorts`   | `?sorts=createdAt:desc`                    | Ordenamiento (`campo:asc` o `campo:desc`)    |
+
+Ejemplo completo:
 
 ```
-GET /users?limit=20&sortBy=createdAt:DESC&search=ali&filter.email=$eq:alice@example.com
+GET /users?page=1&pageSize=5&filters=email@=example&sorts=createdAt:desc
 ```
+
+Ver [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) para la documentación completa de filtros y operadores.
 
 Current endpoints:
 
@@ -215,7 +243,7 @@ Current endpoints:
 | `GET`  | `/health`                  | Service health check                            |
 | `POST` | `/users`                   | Create a user                                   |
 | `GET`  | `/users/:id`               | Get a user by id                                |
-| `GET`  | `/users`                   | List users (offset/cursor + filter/sort/search) |
+| `GET`  | `/users`                   | List users (paginated, filtered, sorted)      |
 
 > If you prefer the classic Swagger UI, that's a one-line change in `src/main.ts`.
 
@@ -286,7 +314,7 @@ npm run prisma:studio           # inspect data in a browser on localhost:5555
 
 **Local development (create a migration):**
 ```bash
-# 1. Edit prisma/schema.prisma
+# 1. Edit prisma/models/<entity>.prisma (or create a new one)
 # 2. Generate + apply the migration on your local DB, and commit the file
 npm run migration:dev
 ```
@@ -309,7 +337,7 @@ npm run migration:run
 npm run migration:run
 ```
 
-> **Migrations only:** there is no `prisma db push` / auto-sync in this project. The schema (`prisma/schema.prisma`) is the single source of truth, and every schema change is expressed as a migration in `prisma/migrations/` and applied with `npm run migration:dev` (local) or `npm run migration:run` (dev/prod). A fresh database is bootstrapped by replaying the full migration history with `npm run migration:run`.
+> **Migrations only:** there is no `prisma db push` / auto-sync in this project. The schema files (`prisma/schema.prisma` + `prisma/models/*.prisma`) are the single source of truth, and every schema change is expressed as a migration in `prisma/migrations/` and applied with `npm run migration:dev` (local) or `npm run migration:run` (dev/prod). A fresh database is bootstrapped by replaying the full migration history with `npm run migration:run`.
 
 ---
 
@@ -337,7 +365,7 @@ To run against Supabase, replace `TU_PASSWORD_SUPABASE` in `.env` with your real
 4. Implement handlers against the repository **port**.
 5. Register the new endpoint in the feature module's `controllers` and the handler in its `providers`.
 6. The module is already joined to the HTTP layer through `src/routes/routes.module.ts` — only new **modules** need to be imported there.
-7. If the feature adds a table/column, add the model to `prisma/schema.prisma`, run `npm run prisma:generate` and generate a migration (see [Database migrations](#database-migrations)).
+7. If the feature adds a table/column, create or edit the model file in `prisma/models/<entity>.prisma`, run `npm run prisma:generate` and generate a migration (see [Database migrations](#database-migrations)).
 8. Add tests under `tests/<module>/<feature>/`.
 
 Keep each slice self-contained; shared code that is truly cross-cutting belongs in `src/common/` (e.g. config) or `src/prisma/` (the Prisma client module).
@@ -347,7 +375,7 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 ## Conventions
 
 - **Code comments are in English**.
-- DTOs carry `class-validator` rules (input safety) and `@nestjs/swagger` decorators (documentation). The `GET /users` listing is auto-documented via `@ApiPaginatedResponse` from `@nestarc/pagination`.
+- DTOs carry `class-validator` rules (input safety) and `@nestjs/swagger` decorators (documentation). The `GET /users` listing uses `@Sieve()` decorator with `@ApiQuery` for manual OpenAPI documentation.
 - Handlers never talk to HTTP or the database driver directly — only through the repository **port** (interface), which is what makes them mockable in tests.
 - Endpoints are thin adapters between HTTP and the CQRS buses.
 - Each feature folder contains its own endpoint, handler, command/query and dto; the read model shared by the whole module lives in the module's `dto/` folder.
@@ -356,3 +384,13 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 - Persistence goes through **Prisma** only: `src/prisma/prisma.service.ts` is the single PrismaClient instance, injected via the `@Global()` `PrismaModule`.
 - Schema changes always go through [Prisma Migrate](#database-migrations) in every environment — migrations are the only way to sync the schema (no auto-sync).
 - `.env` is git-ignored; commit only `.env.example`.
+
+---
+
+## Documentation
+
+| Document | Descripción |
+| --- | --- |
+| [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) | Cómo usar paginación/filtrado/ordenamiento desde el frontend |
+| [docs/custom-sieve/implementation.md](docs/custom-sieve/implementation.md) | Implementación interna del sistema PrismaSieve |
+| [docs/custom-sieve/implement-new-entity-guide.md](docs/custom-sieve/implement-new-entity-guide.md) | Guía paso a paso para agregar una nueva entidad |
