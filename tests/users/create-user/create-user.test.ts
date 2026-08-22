@@ -11,6 +11,7 @@ describe('CreateUserHandler', () => {
     repository = {
       create: jest.fn(),
       findById: jest.fn(),
+      findByEmail: jest.fn(),
       findByUsername: jest.fn(),
       findMany: jest.fn(),
     };
@@ -19,7 +20,7 @@ describe('CreateUserHandler', () => {
 
   it('creates and persists a user when the username is available', async () => {
     repository.findByUsername.mockResolvedValue(null);
-    repository.create.mockImplementation((user) => user);
+    repository.create.mockImplementation(async (user) => user);
 
     const result = await handler.execute(
       new CreateUserCommand(
@@ -53,7 +54,7 @@ describe('CreateUserHandler', () => {
 
   it('defaults optional fields to null', async () => {
     repository.findByUsername.mockResolvedValue(null);
-    repository.create.mockImplementation((user) => user);
+    repository.create.mockImplementation(async (user) => user);
 
     const result = await handler.execute(new CreateUserCommand('reader'));
 

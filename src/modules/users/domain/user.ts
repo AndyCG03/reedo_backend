@@ -1,11 +1,13 @@
 import { TimestampedEntity } from '../../../common/domain/base-entity';
 
+export type UserRole = 'USER' | 'ADMIN';
+
 /**
  * User aggregate.
  *
- * This is a persistence-agnostic model: it does not know whether the data is
- * stored in PostgreSQL, Supabase or Firebase. Persistence concerns live in
- * the infrastructure layer of this vertical slice.
+ * Persistence-agnostic model. The passwordHash field is optional so that
+ * existing code that creates users without auth context keeps working. It is
+ * intentionally excluded from every response DTO.
  */
 export class User extends TimestampedEntity {
   public constructor(
@@ -14,23 +16,22 @@ export class User extends TimestampedEntity {
     public readonly email: string | null,
     public readonly bio: string | null,
     public readonly avatarUrl: string | null,
+    public readonly passwordHash: string | null,
+    public readonly role: UserRole,
     createdAt: Date,
     updatedAt: Date,
   ) {
     super(createdAt, updatedAt);
   }
 
-  /**
-   * Factory used by application code to build a valid user.
-   * Optional fields default to null and timestamps are set here so behavior
-   * stays uniform regardless of the storage adapter.
-   */
   public static create(input: {
     id: string;
     username: string;
     email?: string | null;
     bio?: string | null;
     avatarUrl?: string | null;
+    passwordHash?: string | null;
+    role?: UserRole;
   }): User {
     const now = new Date();
     return new User(
@@ -39,6 +40,8 @@ export class User extends TimestampedEntity {
       input.email ?? null,
       input.bio ?? null,
       input.avatarUrl ?? null,
+      input.passwordHash ?? null,
+      input.role ?? 'USER',
       now,
       now,
     );

@@ -4,17 +4,17 @@ import { BooksModule } from '../modules/books/books.module';
 import { UserBooksModule } from '../modules/user-books/user-books.module';
 import { SyncModule } from '../modules/sync/sync.module';
 import { PostsModule } from '../modules/posts/posts.module';
+import { AuthModule } from '../modules/auth/auth.module';
 import { HealthEndpoint } from './health.endpoint';
 
 /**
  * General endpoint mapper.
  *
- * This is the single place where the endpoints of every feature/module are
- * joined and exposed to the HTTP layer. When you add a new feature module,
- * register it here (and add its module to the imports array).
+ * Single place where every feature module is joined to the HTTP layer.
+ * When you add a new feature module, register it here.
  */
 @Module({
-  imports: [UsersModule, BooksModule, UserBooksModule, SyncModule, PostsModule],
+  imports: [AuthModule, UsersModule, BooksModule, UserBooksModule, SyncModule, PostsModule],
   controllers: [HealthEndpoint],
 })
 export class RoutesModule {}

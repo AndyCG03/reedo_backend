@@ -25,6 +25,8 @@ export const scalarConfig = new DocumentBuilder()
       'Vertical Slice Architecture, CQRS and TDD.',
   )
   .setVersion('1.0.0')
+  .addBearerAuth()
+  .addTag('auth', 'Authentication — register, login, token refresh and logout')
   .addTag('app', 'Service health check and general API info')
   .addTag(
     'books',
@@ -34,7 +36,7 @@ export const scalarConfig = new DocumentBuilder()
   .addTag(
     'comments',
     'Social module — comments on posts. Create, update and delete comments. ' +
-      'No nested threads in this MVP. Use the stub user id until JWT auth is implemented.',
+      'No nested threads in this MVP.',
   )
   .addTag(
     'feed',
@@ -44,13 +46,12 @@ export const scalarConfig = new DocumentBuilder()
   .addTag(
     'posts',
     'Social module — publications. Create, update, delete posts ' +
-      'and manage likes. Posts can optionally be linked to a book. ' +
-      'Use the stub user id until JWT auth is implemented.',
+      'and manage likes. Posts can optionally be linked to a book.',
   )
   .addTag(
     'sync',
     'Offline-first synchronization. Push local changes and pull remote changes ' +
-      'using a cursor-based approach. Use the stub user id until JWT auth is implemented.',
+      'using a cursor-based approach.',
   )
   .addTag(
     'user-books',
@@ -60,7 +61,7 @@ export const scalarConfig = new DocumentBuilder()
   .addTag(
     'users',
     'User profile management. Create, retrieve and list users. ' +
-      'No authentication required in the current version.',
+      'GET /users/me requires a valid Bearer token.',
   )
   .build();
 

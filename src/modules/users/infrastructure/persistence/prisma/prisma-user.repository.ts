@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../../../prisma/prisma.service';
-import { User } from '../../../domain/user';
+import { User, UserRole } from '../../../domain/user';
 import type { UserRepository } from '../../../domain/user.repository';
 import type {
   PaginatedResult,
@@ -11,9 +11,6 @@ import { UserSieveConfig } from './user.sieve';
 
 /**
  * PostgreSQL (Prisma) adapter for the user repository port.
- *
- * Implements the same UserRepository interface the former TypeORM adapter
- * did, so the domain and application layers never change.
  */
 @Injectable()
 export class PrismaUserRepository implements UserRepository {
@@ -27,6 +24,8 @@ export class PrismaUserRepository implements UserRepository {
         email: user.email,
         bio: user.bio,
         avatarUrl: user.avatarUrl,
+        passwordHash: user.passwordHash,
+        role: user.role,
       },
     });
     return user;
@@ -34,6 +33,11 @@ export class PrismaUserRepository implements UserRepository {
 
   public async findById(id: string): Promise<User | null> {
     const record = await this.prisma.user.findUnique({ where: { id } });
+    return record ? this.toDomain(record) : null;
+  }
+
+  public async findByEmail(email: string): Promise<User | null> {
+    const record = await this.prisma.user.findFirst({ where: { email } });
     return record ? this.toDomain(record) : null;
   }
 
@@ -71,6 +75,8 @@ export class PrismaUserRepository implements UserRepository {
     email: string | null;
     bio: string | null;
     avatarUrl: string | null;
+    passwordHash: string | null;
+    role: string;
     createdAt: Date;
     updatedAt: Date;
   }): User {
@@ -80,6 +86,8 @@ export class PrismaUserRepository implements UserRepository {
       record.email,
       record.bio,
       record.avatarUrl,
+      record.passwordHash,
+      record.role as UserRole,
       record.createdAt,
       record.updatedAt,
     );

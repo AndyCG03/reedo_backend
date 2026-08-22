@@ -9,6 +9,11 @@ export default () => ({
   env: process.env.NODE_ENV ?? 'development',
   port: parseInt(process.env.PORT ?? '3000', 10),
   docsPath: process.env.DOCS_PATH ?? 'docs',
+  jwt: {
+    secret: process.env.JWT_SECRET ?? 'change-me-in-production',
+    expiresIn: process.env.JWT_EXPIRES_IN ?? '15m',
+    refreshExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN ?? '30d',
+  },
   database: {
     /**
      * Runtime connection string consumed by Prisma Client through the `pg`

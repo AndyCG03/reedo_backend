@@ -1,17 +1,25 @@
 model User {
-  id        String   @id @db.Uuid
-  username  String   @unique @db.VarChar(30)
-  email     String?  @db.VarChar(320)
-  bio       String?  @db.VarChar(280)
-  avatarUrl String?  @map("avatar_url") @db.VarChar(500)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @db.Uuid
+  username     String   @unique @db.VarChar(30)
+  email        String?  @db.VarChar(320)
+  bio          String?  @db.VarChar(280)
+  avatarUrl    String?  @map("avatar_url") @db.VarChar(500)
+  passwordHash String?  @map("password_hash") @db.VarChar(255)
+  role         UserRole @default(USER)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  userBooks   UserBook[]
-  syncChanges SyncChange[]
-  posts       Post[]
-  postLikes   PostLike[]
-  comments    Comment[]
+  userBooks     UserBook[]
+  syncChanges   SyncChange[]
+  posts         Post[]
+  postLikes     PostLike[]
+  comments      Comment[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
 }
