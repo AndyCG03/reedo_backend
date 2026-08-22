@@ -394,3 +394,7 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 | [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) | Cómo usar paginación/filtrado/ordenamiento desde el frontend |
 | [docs/custom-sieve/implementation.md](docs/custom-sieve/implementation.md) | Implementación interna del sistema PrismaSieve |
 | [docs/custom-sieve/implement-new-entity-guide.md](docs/custom-sieve/implement-new-entity-guide.md) | Guía paso a paso para agregar una nueva entidad |
+| [docs/sync/business-flow.md](docs/sync/business-flow.md) | Flujo de negocio de sincronización offline-first |
+| [docs/sync/push-sync.md](docs/sync/push-sync.md) | Implementación del POST /sync (push de cambios) |
+| [docs/sync/pull-sync.md](docs/sync/pull-sync.md) | Implementación del GET /sync (pull de cambios) |
+| [docs/sync/frontend-integration.md](docs/sync/frontend-integration.md) | Guía de integración para Flutter |
