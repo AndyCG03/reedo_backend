@@ -145,6 +145,30 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │           │   └── user.repository.ts   (port INTERFACE + DI token)
 │           └── infrastructure/
 │               └── persistence/prisma/       (adapter)
+│       ├── auth/                   #  ── VERTICAL SLICE ─────────────
+│           ├── auth.module.ts
+│           ├── auth.controller.ts
+│           ├── auth.service.ts
+│           ├── dto/
+│           │   └── auth-response.dto.ts
+│           ├── features/
+│           │   ├── register/        # POST /auth/register
+│           │   ├── login/           # POST /auth/login
+│           │   ├── refresh/         # POST /auth/refresh
+│           │   └── logout/          # POST /auth/logout
+│           ├── domain/
+│           │   ├── refresh-token.ts
+│           │   └── refresh-token.repository.ts
+│           ├── guards/
+│           │   ├── jwt-auth.guard.ts
+│           │   └── roles.guard.ts
+│           ├── decorators/
+│           │   ├── current-user.decorator.ts
+│           │   └── roles.decorator.ts
+│           ├── strategies/
+│           │   └── jwt.strategy.ts
+│           └── infrastructure/
+│               └── persistence/prisma/
 │       └── posts/                   #  ── VERTICAL SLICE ─────────────
 │           ├── posts.module.ts
 │           ├── dto/
@@ -217,6 +241,22 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 
 ## Getting started
 
+### 0. Admin Seeder (Optional)
+
+Para crear un usuario administrador inicial para desarrollo y pruebas:
+
+```bash
+npm run seed:admin
+```
+
+Esto crea un usuario con:
+- Email: `admin@gmail.com`
+- Password: `Admin12345678!`
+- Username: `admin`
+- Role: `ADMIN`
+
+El seeder es idempotente - si el admin ya existe, no hace nada. Cambia estas credenciales en producción.
+
 ### 1. Install dependencies
 
 ```bash
@@ -263,6 +303,36 @@ npm run start:dev
 The API listens on `http://localhost:3000`.
 
 ---
+
+## Available commands
+
+```bash
+# Development
+npm run start:dev          # Start development server with hot reload
+npm run start              # Start production server
+npm run build              # Build the project
+
+# Database
+npm run migration:dev      # Create and apply migration (local)
+npm run migration:generate # Generate migration file only
+npm run migration:run      # Apply pending migrations
+npm run migration:reset    # Reset database and re-apply migrations
+npm run migration:status   # Show migration status
+npm run prisma:studio      # Open Prisma Studio (database GUI)
+npm run prisma:generate    # Generate Prisma Client
+
+# Admin
+npm run seed:admin         # Create admin user (idempotent)
+
+# Testing
+npm run test               # Run all tests
+npm run test:cov           # Run tests with coverage
+npm run test:watch         # Run tests in watch mode
+
+# Code quality
+npm run lint               # Run ESLint
+npm run format             # Format code with Prettier
+```
 
 ## API reference (Scalar)
 
@@ -454,6 +524,9 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 
 | Document | Descripcion |
 | --- | --- |
+| [docs/auth/USAGE.md](docs/auth/USAGE.md) | Como usar el sistema de autenticacion, Scalar y el seeder de admin |
+| [docs/auth/IMPLEMENTATION.md](docs/auth/IMPLEMENTATION.md) | Implementacion interna del sistema de autenticacion (guards, decoradores, servicios) |
+| [docs/auth/FLUTTER_INTEGRATION.md](docs/auth/FLUTTER_INTEGRATION.md) | Guia de integracion para Flutter con experiencia tipo Duolingo |
 | [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) | Como usar paginacion/filtrado/ordenamiento desde el frontend |
 | [docs/custom-sieve/implementation.md](docs/custom-sieve/implementation.md) | Implementacion interna del sistema PrismaSieve |
 | [docs/custom-sieve/implement-new-entity-guide.md](docs/custom-sieve/implement-new-entity-guide.md) | Guia paso a paso para agregar una nueva entidad |
