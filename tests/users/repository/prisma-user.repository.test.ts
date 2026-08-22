@@ -47,6 +47,8 @@ describe('PrismaUserRepository', () => {
           email: 'bookworm@example.com',
           bio: null,
           avatarUrl: null,
+          passwordHash: null,
+          role: 'USER',
         },
       });
       expect(result).toEqual(user);
@@ -61,6 +63,8 @@ describe('PrismaUserRepository', () => {
         email: 'bookworm@example.com',
         bio: 'I love books',
         avatarUrl: null,
+        passwordHash: null,
+        role: 'USER',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
       };
@@ -78,6 +82,8 @@ describe('PrismaUserRepository', () => {
           record.email,
           record.bio,
           record.avatarUrl,
+          record.passwordHash,
+          record.role,
           record.createdAt,
           record.updatedAt,
         ),
@@ -101,6 +107,8 @@ describe('PrismaUserRepository', () => {
         email: 'bookworm@example.com',
         bio: null,
         avatarUrl: null,
+        passwordHash: null,
+        role: 'USER',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
       };
@@ -118,6 +126,8 @@ describe('PrismaUserRepository', () => {
           record.email,
           record.bio,
           record.avatarUrl,
+          record.passwordHash,
+          record.role,
           record.createdAt,
           record.updatedAt,
         ),
@@ -141,6 +151,8 @@ describe('PrismaUserRepository', () => {
         email: 'bookworm@example.com',
         bio: null,
         avatarUrl: null,
+        passwordHash: null,
+        role: 'USER',
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
         updatedAt: new Date('2026-01-01T00:00:00.000Z'),
       };
@@ -158,6 +170,8 @@ describe('PrismaUserRepository', () => {
           record.email,
           record.bio,
           record.avatarUrl,
+          record.passwordHash,
+          record.role,
           record.createdAt,
           record.updatedAt,
         ),
