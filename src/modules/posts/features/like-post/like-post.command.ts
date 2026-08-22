@@ -1,0 +1,6 @@
+export class LikePostCommand {
+  public constructor(
+    public readonly postId: string,
+    public readonly userId: string,
+  ) {}
+}

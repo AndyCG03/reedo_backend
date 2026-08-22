@@ -1,0 +1,19 @@
+model Post {
+  id        String   @id @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  bookId    String?  @map("book_id") @db.Uuid
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  user       User        @relation(fields: [userId], references: [id])
+  book       Book?       @relation(fields: [bookId], references: [id])
+  postLikes  PostLike[]
+  comments   Comment[]
+
+  @@index([userId])
+  @@index([bookId])
+  @@index([createdAt])
+  @@map("posts")
+}

@@ -3,6 +3,7 @@ import { UsersModule } from '../modules/users/users.module';
 import { BooksModule } from '../modules/books/books.module';
 import { UserBooksModule } from '../modules/user-books/user-books.module';
 import { SyncModule } from '../modules/sync/sync.module';
+import { PostsModule } from '../modules/posts/posts.module';
 import { HealthEndpoint } from './health.endpoint';
 
 /**
@@ -13,7 +14,7 @@ import { HealthEndpoint } from './health.endpoint';
  * register it here (and add its module to the imports array).
  */
 @Module({
-  imports: [UsersModule, BooksModule, UserBooksModule, SyncModule],
+  imports: [UsersModule, BooksModule, UserBooksModule, SyncModule, PostsModule],
   controllers: [HealthEndpoint],
 })
 export class RoutesModule {}

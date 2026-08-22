@@ -6,6 +6,7 @@ model Book {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   userBooks UserBook[]
+  posts     Post[]
 
   @@map("books")
 }
