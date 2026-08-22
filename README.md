@@ -2,7 +2,7 @@
 
 Backend for a **reading application**. Built with [NestJS](https://nestjs.com), PostgreSQL and TypeScript, following **Vertical Slice Architecture**, **CQRS** and **TDD**, with **Scalar** providing the interactive API documentation and testing playground.
 
-> This is the initial skeleton. It ships with one vertical slice — **User Profile** — as a working reference of the conventions used across the whole codebase.
+> This is the initial skeleton. It ships with vertical slices — **User Profile**, **Social Module** (posts, likes, comments, feed) — as working references of the conventions used across the whole codebase.
 
 ---
 
@@ -55,11 +55,11 @@ HTTP request
       │
       ▼
 ┌─────────────────────────────────────────────┐
-│ modules/users                        │
-│  users.module.ts        (transport)   │
-│  application/                 (use cases)   │
-│    commands/...                             │
-│    queries/...                              │
+│ modules/users or modules/posts      │
+│  <module>.module.ts         (transport)   │
+│  features/                        (use cases)   │
+│    <feature>/command.ts or query.ts              │
+│    <feature>/handler.ts                          │
 │  domain/                      (business)    │
 │  infrastructure/persistence/  (adapters)    │
 └─────────────────────────────────────────────┘
@@ -95,7 +95,13 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 ├── prisma/
 │   ├── schema.prisma               # Prisma schema (generator + datasource only)
 │   └── models/                     # One .prisma file per entity
-│       └── user.prisma             # User model
+│       ├── user.prisma             # User model
+│       ├── book.prisma             # Book model
+│       ├── user-book.prisma        # UserBook model
+│       ├── sync-change.prisma      # SyncChange model
+│       ├── post.prisma             # Post model
+│       ├── post-like.prisma        # PostLike model
+│       └── comment.prisma          # Comment model
 ├── prisma.config.ts                # Prisma CLI configuration (env, migrations)
 ├── src/
 │   ├── main.ts                     # Bootstrap: pipes, OpenAPI, Scalar UI
@@ -116,7 +122,7 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │   │       ├── prisma-sieve.ts     # Builder: SieveOptions → Prisma where/orderBy
 │   │       └── sieve.decorator.ts  # @Sieve() param decorator + parseSieveQuery
 │   └── modules/
-│       └── users/                   #  ── VERTICAL SLICE ─────────────
+│       ├── users/                   #  ── VERTICAL SLICE ─────────────
 │           ├── users.module.ts
 │           ├── dto/
 │           │   └── user.response.dto.ts   # Read model (shared)
@@ -139,11 +145,42 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
 │           │   └── user.repository.ts   (port INTERFACE + DI token)
 │           └── infrastructure/
 │               └── persistence/prisma/       (adapter)
+│       └── posts/                   #  ── VERTICAL SLICE ─────────────
+│           ├── posts.module.ts
+│           ├── dto/
+│           │   ├── post.response.dto.ts
+│           │   └── comment.response.dto.ts
+│           ├── features/
+│           │   ├── create-post/      # POST /posts
+│           │   ├── get-post/         # GET /posts/:id
+│           │   ├── list-posts/       # GET /posts
+│           │   ├── update-post/      # PATCH /posts/:id
+│           │   ├── delete-post/      # DELETE /posts/:id
+│           │   ├── like-post/        # POST /posts/:id/like
+│           │   ├── unlike-post/      # DELETE /posts/:id/like
+│           │   ├── create-comment/   # POST /posts/:id/comments
+│           │   ├── list-comments/    # GET /posts/:id/comments
+│           │   ├── update-comment/   # PATCH /comments/:id
+│           │   ├── delete-comment/   # DELETE /comments/:id
+│           │   └── get-feed/         # GET /feed
+│           ├── domain/
+│           │   ├── post.ts
+│           │   ├── post.repository.ts
+│           │   ├── comment.ts
+│           │   ├── comment.repository.ts
+│           │   ├── post-like.ts
+│           │   └── post-like.repository.ts
+│           └── infrastructure/
+│               └── persistence/prisma/
 ├── docs/
-│   └── custom-sieve/                #  ── SIEVE DOCUMENTATION ────────
-│       ├── usage.md                 # How to use from the frontend
-│       ├── implementation.md        # Internal implementation details
-│       └── implement-new-entity-guide.md  # Step-by-step guide
+│   ├── custom-sieve/                #  ── SIEVE DOCUMENTATION ────────
+│   │   ├── usage.md
+│   │   ├── implementation.md
+│   │   └── implement-new-entity-guide.md
+│   └── social-media/                #  ── SOCIAL MODULE DOCS ─────────
+│       ├── overview.md              # Vision general, MVP y planes futuros
+│       ├── implementation.md        # Arquitectura y detalles tecnicos
+│       └── flutter-integration.md   # Guia de integracion para Flutter
 └── tests/                            #  ── DEDICATED TEST FOLDER ─────
     ├── common/sieve/                 # sieve unit tests
     │   ├── prisma-sieve.test.ts
@@ -160,6 +197,20 @@ Swapping the storage backend is therefore a **wiring concern**, not a code chang
         │   └── list-users.endpoint.test.ts
         └── repository/               # persistence adapter tests
             └── prisma-user.repository.test.ts
+    └── posts/                # per module
+        ├── create-post/
+        ├── get-post/
+        ├── list-posts/
+        ├── update-post/
+        ├── delete-post/
+        ├── like-post/
+        ├── unlike-post/
+        ├── create-comment/
+        ├── list-comments/
+        ├── update-comment/
+        ├── delete-comment/
+        ├── get-feed/
+        └── repository/
 ```
 
 ---
@@ -238,12 +289,24 @@ Ver [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) para la documentaci
 
 Current endpoints:
 
-| Method | Path                       | Description                                     |
-| ------ | -------------------------- | ----------------------------------------------- |
-| `GET`  | `/health`                  | Service health check                            |
-| `POST` | `/users`                   | Create a user                                   |
-| `GET`  | `/users/:id`               | Get a user by id                                |
-| `GET`  | `/users`                   | List users (paginated, filtered, sorted)      |
+| Method | Path                          | Description                                     |
+| ------ | ----------------------------- | ----------------------------------------------- |
+| `GET`  | `/health`                     | Service health check                            |
+| `POST` | `/users`                      | Create a user                                   |
+| `GET`  | `/users/:id`                  | Get a user by id                                |
+| `GET`  | `/users`                      | List users (paginated, filtered, sorted)        |
+| `POST` | `/posts`                      | Create a post                                   |
+| `GET`  | `/posts/:id`                  | Get a post (enriched with author, book, likes)  |
+| `GET`  | `/posts`                      | List posts (paginated, filtered by userId/bookId)|
+| `PATCH`| `/posts/:id`                  | Update a post (owner only)                      |
+| `DELETE`| `/posts/:id`                  | Delete a post (soft delete, owner only)         |
+| `POST` | `/posts/:id/like`             | Like a post                                     |
+| `DELETE`| `/posts/:id/like`             | Unlike a post                                   |
+| `POST` | `/posts/:id/comments`         | Create a comment on a post                      |
+| `GET`  | `/posts/:id/comments`         | List comments on a post (paginated)             |
+| `PATCH`| `/comments/:id`               | Update a comment (owner only)                   |
+| `DELETE`| `/comments/:id`               | Delete a comment (soft delete, owner only)      |
+| `GET`  | `/feed`                       | Feed ordered by creation date (paginated)       |
 
 > If you prefer the classic Swagger UI, that's a one-line change in `src/main.ts`.
 
@@ -389,12 +452,15 @@ Keep each slice self-contained; shared code that is truly cross-cutting belongs 
 
 ## Documentation
 
-| Document | Descripción |
+| Document | Descripcion |
 | --- | --- |
-| [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) | Cómo usar paginación/filtrado/ordenamiento desde el frontend |
-| [docs/custom-sieve/implementation.md](docs/custom-sieve/implementation.md) | Implementación interna del sistema PrismaSieve |
-| [docs/custom-sieve/implement-new-entity-guide.md](docs/custom-sieve/implement-new-entity-guide.md) | Guía paso a paso para agregar una nueva entidad |
-| [docs/sync/business-flow.md](docs/sync/business-flow.md) | Flujo de negocio de sincronización offline-first |
-| [docs/sync/push-sync.md](docs/sync/push-sync.md) | Implementación del POST /sync (push de cambios) |
-| [docs/sync/pull-sync.md](docs/sync/pull-sync.md) | Implementación del GET /sync (pull de cambios) |
-| [docs/sync/frontend-integration.md](docs/sync/frontend-integration.md) | Guía de integración para Flutter |
+| [docs/custom-sieve/usage.md](docs/custom-sieve/usage.md) | Como usar paginacion/filtrado/ordenamiento desde el frontend |
+| [docs/custom-sieve/implementation.md](docs/custom-sieve/implementation.md) | Implementacion interna del sistema PrismaSieve |
+| [docs/custom-sieve/implement-new-entity-guide.md](docs/custom-sieve/implement-new-entity-guide.md) | Guia paso a paso para agregar una nueva entidad |
+| [docs/sync/business-flow.md](docs/sync/business-flow.md) | Flujo de negocio de sincronizacion offline-first |
+| [docs/sync/push-sync.md](docs/sync/push-sync.md) | Implementacion del POST /sync (push de cambios) |
+| [docs/sync/pull-sync.md](docs/sync/pull-sync.md) | Implementacion del GET /sync (pull de cambios) |
+| [docs/sync/frontend-integration.md](docs/sync/frontend-integration.md) | Guia de integracion para Flutter |
+| [docs/social-media/overview.md](docs/social-media/overview.md) | Vision general del modulo social, MVP y planes futuros |
+| [docs/social-media/implementation.md](docs/social-media/implementation.md) | Arquitectura e implementacion tecnica del modulo social |
+| [docs/social-media/flutter-integration.md](docs/social-media/flutter-integration.md) | Guia de integracion del modulo social con Flutter |
