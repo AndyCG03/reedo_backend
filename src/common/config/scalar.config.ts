@@ -25,6 +25,43 @@ export const scalarConfig = new DocumentBuilder()
       'Vertical Slice Architecture, CQRS and TDD.',
   )
   .setVersion('1.0.0')
+  .addTag('app', 'Service health check and general API info')
+  .addTag(
+    'books',
+    'Book catalog management. Create, retrieve and list books. ' +
+      'Each book tracks total pages and reading progress per user.',
+  )
+  .addTag(
+    'comments',
+    'Social module — comments on posts. Create, update and delete comments. ' +
+      'No nested threads in this MVP. Use the stub user id until JWT auth is implemented.',
+  )
+  .addTag(
+    'feed',
+    'Social module — chronological feed of all posts ordered by creation date. ' +
+      'Supports standard Sieve pagination.',
+  )
+  .addTag(
+    'posts',
+    'Social module — publications. Create, update, delete posts ' +
+      'and manage likes. Posts can optionally be linked to a book. ' +
+      'Use the stub user id until JWT auth is implemented.',
+  )
+  .addTag(
+    'sync',
+    'Offline-first synchronization. Push local changes and pull remote changes ' +
+      'using a cursor-based approach. Use the stub user id until JWT auth is implemented.',
+  )
+  .addTag(
+    'user-books',
+    'User reading progress. Track which books a user is reading, ' +
+      'current page, and last read timestamp.',
+  )
+  .addTag(
+    'users',
+    'User profile management. Create, retrieve and list users. ' +
+      'No authentication required in the current version.',
+  )
   .build();
 
 interface FlatOperation {
@@ -40,11 +77,6 @@ interface FlatOperation {
  *     then alphabetically by path within the same method
  */
 export function sortOpenApiDocument(document: OpenAPIObject): OpenAPIObject {
-  // Sort tags alphabetically
-  if (document.tags) {
-    document.tags.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
   // Flatten all operations with their primary tag
   const flat: FlatOperation[] = [];
 
@@ -72,7 +104,6 @@ export function sortOpenApiDocument(document: OpenAPIObject): OpenAPIObject {
   });
 
   // Rebuild paths preserving the sorted order.
-  // Each path key appears once; operations within it are sorted by method.
   const sortedPaths: OpenAPIObject['paths'] = {};
   const seenPaths = new Set<string>();
 
@@ -86,6 +117,22 @@ export function sortOpenApiDocument(document: OpenAPIObject): OpenAPIObject {
   }
 
   document.paths = sortedPaths;
+
+  // Rebuild tags array based on the sorted operations order
+  // so Scalar renders them in the correct sequence.
+  const seenTags = new Set<string>();
+  const sortedTags: { name: string; description?: string }[] = [];
+  for (const { tag } of flat) {
+    if (tag && !seenTags.has(tag)) {
+      seenTags.add(tag);
+      const existing = document.tags?.find((t) => t.name === tag);
+      sortedTags.push({
+        name: tag,
+        description: existing?.description,
+      });
+    }
+  }
+  document.tags = sortedTags;
 
   return document;
 }
